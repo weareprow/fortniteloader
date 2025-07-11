@@ -1,4 +1,5 @@
-#fortniteloader
+# FortniteLoader
+Automatically get prow images in Fortnite Battle Pass
 
 ## How to install
 
