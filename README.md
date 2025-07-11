@@ -1,5 +1,10 @@
-# fortniteimages
-automatically get prow images for fortnite
+#fortniteloader
 
-Open the EXE file.
-#### FOR GAME MAP, SELECT THE C28FF1DE0C661DAF01E118A30B3F21B897A7A6E2 FOLDER. BY DEFAULT LOCATED IN C:\Users\YOURNAME\AppData\Local\FortniteGame\Saved\PersistentDownloadDir\CMS\Files\C28FF1DE0C661DAF01E118A30B3F21B897A7A6E2
+## How to install
+
+1. Download the files from the latest release
+2. Extract all the files in the zip/rar file
+3. Put all the files in a place you remember (you need to put the Backup and Loader folders together and the loader.exe can be located somewhere else)
+4. Open loader.exe
+5. Select the game folder (YOU NEED TO SELECT THE C28FF1DE0C661DAF01E118A30B3F21B897A7A6E2 FOLDER, LOCATED IN C:\Users\x\AppData\Local\FortniteGame\Saved\PersistentDownloadDir\CMS\Files BY DEFAULT)
+6. Click the option you want to use, then open the Epic Games Launcher to launch Fortnite
