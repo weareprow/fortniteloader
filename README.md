@@ -1,5 +1,5 @@
 # FortniteLoader
-Automatically get prow images in Fortnite Battle Pass
+Automatically get prow images in Fortnite
 
 ## How to install
 
@@ -14,5 +14,6 @@ Automatically get prow images in Fortnite Battle Pass
 ## Necessities
 
 - Python v3.13 or higher: https://www.python.org/
-- CustomtKinter v25.0.1 or higher: cmd: [pip install customtkinter]
+- CustomtKinter v25.0.1 or higher. Paste in cmd: [pip install customtkinter]
+- Cloudinary v1.44.1 or higher. Paste in cmd: [pip install cloudinary]
 - Fortnite installed via the Epic Games Launcher
