@@ -10,3 +10,6 @@ Automatically get prow images in Fortnite
 5. Select the game folder (YOU NEED TO SELECT THE C28FF1DE0C661DAF01E118A30B3F21B897A7A6E2 FOLDER, LOCATED IN C:\Users\x\AppData\Local\FortniteGame\Saved\PersistentDownloadDir\CMS\Files BY DEFAULT)
      (Make sure to replace 'x' with your username)
 7. Click the option you want to use, then open the Epic Games Launcher to launch Fortnite
+
+### Installation Tutorial + Showcase
+https://youtu.be/PwVw29SEAwk
