@@ -1,21 +1,30 @@
 import os
 import shutil
 import json
+import urllib.request
 from datetime import datetime
 import customtkinter as ctk
-from tkinter import filedialog, messagebox, scrolledtext
+from tkinter import filedialog, messagebox
+from PIL import Image, ImageTk
+import io
 
+# --- Constants ---
 CONFIG_FILE = "config.json"
+TARGET_SUBDIR = os.path.join("Saved", "PersistentDownloadDir", "CMS", "Files", "C28FF1DE0C661DAF01E118A30B3F21B897A7A6E2")
 
-# === CONFIG LOAD/SAVE ===
+# --- Fonts ---
+FONT_LARGE = ("Segoe UI", 22, "bold")
+FONT_MEDIUM = ("Segoe UI", 16)
+FONT_SMALL = ("Segoe UI", 13)
+
+# --- Config ---
 def load_config():
     if os.path.exists(CONFIG_FILE):
         try:
-            with open(CONFIG_FILE, "r") as f:
-                cfg = json.load(f)
-                return {k: v for k, v in cfg.items() if v}
-        except Exception:
-            return {}
+            with open(CONFIG_FILE) as f:
+                return json.load(f)
+        except:
+            pass
     return {}
 
 def save_config(cfg):
@@ -24,123 +33,103 @@ def save_config(cfg):
 
 config = load_config()
 
-# === APP INIT ===
-ctk.set_appearance_mode(config.get("theme", "dark"))
-ctk.set_default_color_theme("blue")
+# --- Appearance ---
+ctk.set_appearance_mode(config.get("theme", "Dark").capitalize())
+ctk.set_default_color_theme("dark-blue")
 
+# --- App Setup ---
 app = ctk.CTk()
-app.title("Epic Loader Manager")
-app.geometry("1000x640")
-app.minsize(800, 600)
+app.title("Fortnite Loader")
+app.geometry("900x580")
+app.resizable(False, False)
 
-# === LOG FUNCTIE ===
-def log(message):
-    timestamp = datetime.now().strftime("[%H:%M:%S]")
-    console.insert("end", f"{timestamp} {message}\n")
-    console.see("end")
+# --- Logger ---
+def log(msg):
+    ts = datetime.now().strftime("[%H:%M:%S]")
+    if 'console' in globals():
+        console.insert("end", f"{ts} {msg}\n")
+        console.see("end")
+    print(f"{ts} {msg}")
 
-# === BUTTON STIJL ===
-def styled_button(master, text, command):
-    return ctk.CTkButton(
-        master,
-        text=text,
-        height=48,
-        width=360,
-        corner_radius=12,
-        font=ctk.CTkFont(size=16, weight="bold"),
-        fg_color="#202225",
-        hover_color="#2f3136",
-        text_color="#ffffff",
-        border_color="#7289da",
-        border_width=2,
-        command=command
-    )
+# --- Utilities ---
+def get_target_path():
+    return os.path.join(config.get("game_path", ""), TARGET_SUBDIR)
 
-# === PADEN ===
-def kies_game_map():
-    folder = filedialog.askdirectory(title="Kies je Game-map (A)")
-    if folder:
-        config["game_path"] = folder
-        save_config(config)
-        log(f"Game-map ingesteld op: {folder}")
-
-def kies_basis_map():
-    folder = filedialog.askdirectory(title="Kies de basis-map")
-    if folder:
-        config["base_dir"] = folder
-        config["loader_path"] = os.path.join(folder, "loader")
-        config["backup_dir"] = os.path.join(folder, "backup")
-        save_config(config)
-        log(f"Basis-map ingesteld op: {folder}")
-
-def validate_base_folder():
+def validate_base():
     base = config.get("base_dir", "")
-    required = ["loader", "backup", "Loader.py"]
-    for name in required:
-        path = os.path.join(base, name)
-        if name.endswith(".py") and not os.path.isfile(path):
-            return False
-        elif not name.endswith(".py") and not os.path.isdir(path):
-            return False
-    return True
+    return all(os.path.isdir(os.path.join(base, name)) for name in ["loader", "backup"])
 
-# === BACKUP ===
-def maak_backup():
-    if not config.get("game_path"):
-        log("Game-map niet ingesteld.")
+# --- File Actions ---
+def make_backup():
+    tgt = get_target_path()
+    if not os.path.exists(tgt):
+        log("Target folder not found.")
         return
     os.makedirs(config["backup_dir"], exist_ok=True)
-    tijdcode = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_pad = os.path.join(config["backup_dir"], f"backup_{tijdcode}")
-    shutil.copytree(config["game_path"], backup_pad)
-    log(f"Backup gemaakt naar: {backup_pad}")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    bkp = os.path.join(config["backup_dir"], f"backup_{ts}")
+    shutil.copytree(tgt, bkp)
+    log(f"Backup created: {bkp}")
 
-# === OPERATIES ===
-def laad_loader_naar_game():
-    if not config.get("game_path") or not config.get("loader_path"):
-        log("Game-map of Loader-map niet ingesteld.")
-        return
-    try:
-        maak_backup()
-        shutil.rmtree(config["game_path"], ignore_errors=True)
-        shutil.copytree(config["loader_path"], config["game_path"])
-        log("Loader gekopieerd naar Game-map.")
-    except Exception as e:
-        log(f"Fout bij laden Loader: {e}")
+def copy_folder(src):
+    tgt = get_target_path()
+    shutil.rmtree(tgt, ignore_errors=True)
+    os.makedirs(os.path.dirname(tgt), exist_ok=True)
+    shutil.copytree(src, tgt)
+    log(f"Copied from {src} to game")
 
-def sync_game_naar_loader():
+def load_loader():
     if not config.get("game_path") or not config.get("loader_path"):
-        log("Game-map of Loader-map niet ingesteld.")
+        log("Game or loader path not set")
         return
-    aantal = 0
-    for root, _, files in os.walk(config["game_path"]):
-        for file in files:
-            src = os.path.join(root, file)
-            rel_path = os.path.relpath(src, config["game_path"])
-            dst = os.path.join(config["loader_path"], rel_path)
+    make_backup()
+    copy_folder(config["loader_path"])
+
+def fabio_mode():
+    if not config.get("game_path") or not config.get("fabio_path"):
+        log("Fabio path not set")
+        messagebox.showerror("Error", "Fabio folder not found.")
+        return
+    make_backup()
+    copy_folder(config["fabio_path"])
+
+def reset_to_default():
+    tgt = get_target_path()
+    if not os.path.exists(tgt):
+        log("Nothing to reset.")
+        return
+    if messagebox.askyesno("Confirm", "Delete all files from game folder?"):
+        shutil.rmtree(tgt)
+        log("Game folder reset.")
+
+def sync_loader():
+    tgt = get_target_path()
+    count = 0
+    for root, _, files in os.walk(tgt):
+        for f in files:
+            src = os.path.join(root, f)
+            rel = os.path.relpath(src, tgt)
+            dst = os.path.join(config["loader_path"], rel)
             if not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
                 shutil.copy2(src, dst)
-                aantal += 1
-                log(f"Gekopieerd: {rel_path}")
-    log(f"Sync voltooid: {aantal} bestanden gekopieerd.")
+                count += 1
+                log(f"Synced: {rel}")
+    log(f"Sync complete: {count} files")
 
-def laad_backup_naar_game():
-    folder = filedialog.askdirectory(title="Kies backup-map")
-    if not folder or not os.path.isdir(folder):
-        log("Geen geldige backup-map gekozen.")
-        return
-    if not os.listdir(folder):
-        log("Backup-map is leeg.")
-        return
-    if not messagebox.askyesno("Bevestiging", f"Backup laden?\n{folder}"):
-        return
+def load_backup():
+    folder = filedialog.askdirectory(title="Select backup folder")
+    if folder and os.listdir(folder):
+        if messagebox.askyesno("Load Backup", f"Load from {folder}?"):
+            copy_folder(folder)
+
+def launch_fn():
     try:
-        shutil.rmtree(config["game_path"], ignore_errors=True)
-        shutil.copytree(folder, config["game_path"])
-        log(f"Backup geladen: {folder}")
+        os.startfile("com.epicgames.launcher://apps/Fortnite?action=launch&silent=true")
+        log("Fortnite launched")
     except Exception as e:
-        log(f"Fout bij laden backup: {e}")
+        log(f"Launch failed: {e}")
+        messagebox.showerror("Error", str(e))
 
 def toggle_theme():
     mode = "Light" if ctk.get_appearance_mode() == "Dark" else "Dark"
@@ -148,128 +137,163 @@ def toggle_theme():
     config["theme"] = mode.lower()
     save_config(config)
 
-# === GUI ===
-tab_buttons = ctk.CTkFrame(app, fg_color="#2f3136")
-tab_buttons.pack(fill="x")
+# --- Setup ---
+def setup_complete():
+    return config.get("game_path") and config.get("base_dir") and validate_base()
 
-main_frame = ctk.CTkFrame(app, fg_color="#2b2d31")
-settings_frame = ctk.CTkFrame(app, fg_color="#2b2d31")
-console_frame = ctk.CTkFrame(app, fg_color="#2b2d31")
-for frame in [main_frame, settings_frame, console_frame]:
-    frame.pack_forget()
+def update_setup():
+    step1_lbl.configure(text=f"Step 1: Select FortniteGame folder. {'✅' if config.get('game_path') else '❌'}")
+    step2_lbl.configure(text=f"Step 2: Select Base folder. {'✅' if config.get('base_dir') and validate_base() else '❌'}")
+    enabled = setup_complete()
+    for b in sidebar_buttons:
+        b.configure(state="normal" if enabled else "disabled")
+    switch_to(main if enabled else wizard_frame)
+    if enabled:
+        log("Setup complete.")
+
+# --- Folder Selection ---
+def select_game_folder():
+    path = filedialog.askdirectory(title="Select FortniteGame folder")
+    if not path:
+        return
+    if os.path.basename(path) == "FortniteGame":
+        target = os.path.join(path, TARGET_SUBDIR)
+        if os.path.exists(target):
+            config["game_path"] = path
+            save_config(config)
+            log(f"Game folder set: {path}")
+            update_setup()
+        else:
+            messagebox.showerror("Error", f"Missing folder:\n{TARGET_SUBDIR}")
+    else:
+        messagebox.showerror("Error", "Selected folder must be 'FortniteGame'")
+
+def select_base_folder():
+    path = filedialog.askdirectory(title="Select base folder")
+    if not path:
+        return
+    loader = os.path.join(path, "loader")
+    fabio = os.path.join(path, "Fabio")
+    if os.path.isdir(loader):
+        config.update({
+            "base_dir": path,
+            "loader_path": loader,
+            "fabio_path": fabio if os.path.isdir(fabio) else "",
+            "backup_dir": os.path.join(path, "backup")
+        })
+        save_config(config)
+        log(f"Base folder set: {path}")
+        update_setup()
+    else:
+        messagebox.showerror("Error", "Base folder must contain a 'loader' folder")
+
+# --- UI Layout ---
+sidebar = ctk.CTkFrame(app, width=200, fg_color="#1F1F1F", corner_radius=0)
+sidebar.pack(side="left", fill="y")
+
+main = ctk.CTkFrame(app)
+settings = ctk.CTkFrame(app)
+console_frame = ctk.CTkFrame(app)
+wizard_frame = ctk.CTkFrame(app)
+fabio_frame = ctk.CTkFrame(app)
+for f in [main, settings, console_frame, wizard_frame, fabio_frame]:
+    f.pack_forget()
 
 current_frame = None
-def switch_to(frame):
+sidebar_buttons = []
+
+logo = None
+try:
+    with urllib.request.urlopen("https://res.cloudinary.com/ddzbf2c9o/image/upload/v1752426644/12840ico_on7j3l.png") as u:
+        logo = ctk.CTkImage(Image.open(io.BytesIO(u.read())), size=(128, 40))
+except Exception as e:
+    log(f"Logo failed: {e}")
+
+if logo:
+    ctk.CTkLabel(sidebar, image=logo, text="").pack(pady=(30, 10))
+else:
+    ctk.CTkLabel(sidebar, text="Fortnite Loader", font=FONT_LARGE).pack(pady=(30, 10))
+
+ctk.CTkLabel(sidebar, text="Dashboard", font=("Segoe UI", 16, "bold"), text_color="#00BFFF").pack(pady=(10, 20))
+
+def sidebar_button(text, command):
+    btn = ctk.CTkButton(
+        sidebar, text=text, command=command,
+        font=("Segoe UI", 14), corner_radius=12,
+        height=40, width=160, fg_color="#2A2A2A",
+        hover_color="#444", text_color="white")
+    return btn
+
+sidebar_buttons.extend([
+    sidebar_button("🏠 Main", lambda: switch_to(main)),
+    sidebar_button("⚙️ Settings", lambda: switch_to(settings)),
+    sidebar_button("📝 Console", lambda: switch_to(console_frame)),
+    sidebar_button("🦾 Fabio", lambda: switch_to(fabio_frame)),
+])
+
+for btn in sidebar_buttons:
+    btn.pack(pady=8, padx=20)
+
+ctk.CTkLabel(sidebar, text=" ", height=30).pack()
+ctk.CTkButton(
+    sidebar, text="🚀 Launch Fortnite", command=launch_fn,
+    font=("Segoe UI", 14, "bold"), corner_radius=20,
+    height=45, width=160, fg_color="#0078D7",
+    hover_color="#005A9E", text_color="white"
+).pack(pady=30, padx=20, side="bottom")
+
+def switch_to(f):
     global current_frame
+    if not setup_complete() and f != wizard_frame:
+        messagebox.showinfo("Setup required", "Please complete setup first.")
+        return
     if current_frame:
         current_frame.pack_forget()
-    frame.pack(fill="both", expand=True)
-    current_frame = frame
+    f.pack(fill="both", expand=True)
+    current_frame = f
 
-styled_button(tab_buttons, "\ud83e\uddd9 Main", lambda: switch_to(main_frame)).pack(side="left", padx=8, pady=12)
-styled_button(tab_buttons, "\u2699\ufe0f Instellingen", lambda: switch_to(settings_frame)).pack(side="left", padx=8, pady=12)
-styled_button(tab_buttons, "\ud83d\udcc4 Console", lambda: switch_to(console_frame)).pack(side="left", padx=8, pady=12)
+# --- Main ---
+ctk.CTkLabel(main, text="👨\u200d🔧 Game ↔ Loader", font=FONT_LARGE).pack(pady=30)
+for t, cmd in [
+    ("📅 Load Loader → Game", load_loader),
+    ("🔁 Sync Game → Loader", sync_loader),
+    ("🗂️ Load Backup", load_backup),
+    ("🔄 Reset to Default", reset_to_default),
+]:
+    ctk.CTkButton(main, text=t, command=cmd, height=40, width=240, font=FONT_MEDIUM).pack(pady=10)
 
-# === MAIN ===
-ctk.CTkLabel(main_frame, text="\ud83e\uddd9 Game \u2192 Loader", font=ctk.CTkFont(size=26, weight="bold"), text_color="#ffffff").pack(pady=30)
-styled_button(main_frame, "\ud83d\udcc5 Laad Loader \u2192 Game", laad_loader_naar_game).pack(pady=8)
-styled_button(main_frame, "\ud83d\udd01 Sync Game \u2192 Loader", sync_game_naar_loader).pack(pady=8)
-styled_button(main_frame, "\ud83d\uddc2\ufe0f Laad Backup", laad_backup_naar_game).pack(pady=8)
+# --- Settings ---
+ctk.CTkLabel(settings, text="⚙️ Settings", font=FONT_LARGE).pack(pady=30)
+for t, cmd in [
+    ("📂 Select Game Folder", select_game_folder),
+    ("📁 Select Base Folder", select_base_folder),
+    ("🌗 Toggle Theme", toggle_theme),
+]:
+    ctk.CTkButton(settings, text=t, command=cmd, height=40, width=240, font=FONT_MEDIUM).pack(pady=10)
 
-# === SETTINGS ===
-ctk.CTkLabel(settings_frame, text="\u2699\ufe0f Instellingen", font=ctk.CTkFont(size=22, weight="bold"), text_color="#ffffff").pack(pady=30)
-styled_button(settings_frame, "\ud83d\udcc2 Kies Game-map", kies_game_map).pack(pady=6)
-styled_button(settings_frame, "\ud83d\udcc1 Kies Basis-map", kies_basis_map).pack(pady=6)
-styled_button(settings_frame, "\ud83c\udf17 Toggle Thema", toggle_theme).pack(pady=6)
+# --- Wizard ---
+ctk.CTkLabel(wizard_frame, text="🔧 Setup Wizard", font=FONT_LARGE).pack(pady=30)
+step1_lbl = ctk.CTkLabel(wizard_frame, text="Step 1: Select FortniteGame folder. ❌", font=FONT_MEDIUM)
+step1_lbl.pack(pady=5)
+ctk.CTkButton(wizard_frame, text="📂 Select Game Folder", command=select_game_folder).pack(pady=5)
+step2_lbl = ctk.CTkLabel(wizard_frame, text="Step 2: Select Base folder. ❌", font=FONT_MEDIUM)
+step2_lbl.pack(pady=5)
+ctk.CTkButton(wizard_frame, text="📁 Select Base Folder", command=select_base_folder).pack(pady=5)
 
-# === CONSOLE ===
-console = scrolledtext.ScrolledText(console_frame, height=20, bg="#1e1e1e", fg="#00ff00")
+# --- Console ---
+console = ctk.CTkTextbox(console_frame, font=("Courier", 14), wrap="word")
 console.pack(fill="both", expand=True, padx=20, pady=20)
 
-# === SETUP WIZARD ===
-class SetupWizard(ctk.CTkToplevel):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.title("Setup Wizard")
-        self.geometry("600x400")
-        self.resizable(False, False)
-        self.grab_set()
-        self.focus_force()
+# --- Fabio ---
+ctk.CTkLabel(fabio_frame, text="🦾 Fabio Mode", font=FONT_LARGE).pack(pady=30)
+ctk.CTkButton(fabio_frame, text="🦄 FABIO MODE", command=fabio_mode, height=40, width=240, font=FONT_MEDIUM).pack(pady=10)
+ctk.CTkButton(fabio_frame, text="🔄 Reset to Default", command=reset_to_default, height=40, width=240, font=FONT_MEDIUM).pack(pady=10)
 
-        self.step = 0
-        self.steps = [self.step_game_path, self.step_base_path]
-        self.init_ui()
-
-    def init_ui(self):
-        self.frame = ctk.CTkFrame(self)
-        self.frame.pack(expand=True, fill="both", padx=20, pady=20)
-
-        self.title_label = ctk.CTkLabel(self.frame, text="", font=ctk.CTkFont(size=20, weight="bold"))
-        self.title_label.pack(pady=(10, 20))
-
-        self.info_label = ctk.CTkLabel(self.frame, text="", wraplength=500, justify="left")
-        self.info_label.pack(pady=(0, 20))
-
-        self.choose_button = styled_button(self.frame, "\ud83d\udcc1 Kies map", self.choose_folder)
-        self.choose_button.pack(pady=10)
-
-        self.path_label = ctk.CTkLabel(self.frame, text="Nog geen map gekozen", text_color="#aaaaaa")
-        self.path_label.pack(pady=10)
-
-        self.next_button = styled_button(self.frame, "\u23e9 Volgende", self.next_step)
-        self.next_button.pack(pady=(20, 0))
-        self.next_button.configure(state="disabled")
-
-        self.steps[self.step]()
-
-    def step_game_path(self):
-        self.title_label.configure(text="Stap 1: Kies Game-map")
-        self.info_label.configure(text="Selecteer waar jouw game is geïnstalleerd.")
-        self.choose_type = "game"
-
-    def step_base_path(self):
-        self.title_label.configure(text="Stap 2: Kies Basis-map")
-        self.info_label.configure(text="Selecteer de map waarin 'loader', 'backup' en 'Loader.py' staan.")
-        self.choose_type = "base"
-
-    def choose_folder(self):
-        folder = filedialog.askdirectory(title="Kies map")
-        if not folder:
-            return
-
-        if self.choose_type == "game":
-            config["game_path"] = folder
-            save_config(config)
-        elif self.choose_type == "base":
-            config["base_dir"] = folder
-            config["loader_path"] = os.path.join(folder, "loader")
-            config["backup_dir"] = os.path.join(folder, "backup")
-            save_config(config)
-
-        self.path_label.configure(text=folder, text_color="#00ff00")
-        self.next_button.configure(state="normal")
-
-    def next_step(self):
-        if self.choose_type == "base" and not validate_base_folder():
-            self.path_label.configure(text="Ongeldige basis-map.", text_color="red")
-            self.next_button.configure(state="disabled")
-            return
-
-        self.step += 1
-        if self.step < len(self.steps):
-            self.next_button.configure(state="disabled")
-            self.steps[self.step]()
-        else:
-            self.destroy()
-            log("Setup voltooid.")
-            switch_to(main_frame)
-
-# Start wizard bij opstarten als config onvolledig
-if not config.get("game_path") or not config.get("base_dir") or not validate_base_folder():
-    app.after(100, lambda: SetupWizard(app))
+# --- Start ---
+if not setup_complete():
+    app.after(100, update_setup)
 else:
-    switch_to(main_frame)
-    log("Programma gestart.")
+    switch_to(main)
+    log("FortniteLoader started")
 
-# === START ===
 app.mainloop()
