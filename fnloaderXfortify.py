@@ -1,3 +1,5 @@
+# Je kan script Loader.py noemen ik dat gdn mr hoeft vgm niet
+
 import os
 import sys
 import json
