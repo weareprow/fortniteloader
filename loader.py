@@ -57,7 +57,8 @@ def get_target_path():
 
 def validate_base():
     base = config.get("base_dir", "")
-    return all(os.path.isdir(os.path.join(base, name)) for name in ["loader", "backup"])
+    # Now only require loader + Fabio (Backup not needed)
+    return all(os.path.isdir(os.path.join(base, name)) for name in ["loader", "Fabio"])
 
 # --- File Actions ---
 def make_backup():
@@ -65,7 +66,7 @@ def make_backup():
     if not os.path.exists(tgt):
         log("Target folder not found.")
         return
-    os.makedirs(config["backup_dir"], exist_ok=True)
+    os.makedirs(config["backup_dir"], exist_ok=True)  # auto-create backup dir
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     bkp = os.path.join(config["backup_dir"], f"backup_{ts}")
     shutil.copytree(tgt, bkp)
@@ -172,20 +173,32 @@ def select_base_folder():
     path = filedialog.askdirectory(title="Select base folder")
     if not path:
         return
+
     loader = os.path.join(path, "loader")
     fabio = os.path.join(path, "Fabio")
-    if os.path.isdir(loader):
+
+    # Require BOTH loader and Fabio folders
+    if os.path.isdir(loader) and os.path.isdir(fabio):
         config.update({
             "base_dir": path,
             "loader_path": loader,
-            "fabio_path": fabio if os.path.isdir(fabio) else "",
+            "fabio_path": fabio,
+            # backup dir will be auto-created later if needed
             "backup_dir": os.path.join(path, "backup")
         })
         save_config(config)
         log(f"Base folder set: {path}")
         update_setup()
     else:
-        messagebox.showerror("Error", "Base folder must contain a 'loader' folder")
+        missing = []
+        if not os.path.isdir(loader):
+            missing.append("'loader'")
+        if not os.path.isdir(fabio):
+            missing.append("'Fabio'")
+        messagebox.showerror(
+            "Error",
+            f"Base folder must contain {', and '.join(missing)} folder(s)."
+        )
 
 # --- UI Layout ---
 sidebar = ctk.CTkFrame(app, width=200, fg_color="#1F1F1F", corner_radius=0)
